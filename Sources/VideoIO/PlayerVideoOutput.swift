@@ -29,7 +29,13 @@ public class PlayerVideoOutput: NSObject {
     
     public var configuration = Configuration() {
         didSet {
+            #if os(iOS) || (os(macOS) && swift(>=5.0))
+            if #available(macOS 14.0, *) {
+                self.displayLink?.preferredFramesPerSecond = self.configuration.preferredFramesPerSecond
+            }
+            #else
             self.displayLink?.preferredFramesPerSecond = self.configuration.preferredFramesPerSecond
+            #endif
         }
     }
     
@@ -49,7 +55,13 @@ public class PlayerVideoOutput: NSObject {
     }
     
     public func setNeedsUpdate() {
+        #if os(iOS) || (os(macOS) && swift(>=5.0))
+        if #available(macOS 14.0, *) {
+            self.displayLink?.isPaused = false
+        }
+        #else
         self.displayLink?.isPaused = false
+        #endif
         self.forceUpdate = true
     }
     
@@ -105,8 +117,15 @@ public class PlayerVideoOutput: NSObject {
     }
     
     private func updatePlayerItem(_ playerItem: AVPlayerItem?) {
+        #if os(iOS) || (os(macOS) && swift(>=5.0))
+        if #available(macOS 14.0, *) {
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+        }
+        #else
         self.displayLink?.invalidate()
         self.displayLink = nil
+        #endif
         if let output = self.playerItemOutput, let item = self.playerItem {
             if item.outputs.contains(output) {
                 item.remove(output)
@@ -158,12 +177,34 @@ public class PlayerVideoOutput: NSObject {
         self.displayLink = nil
         
         if self.playerItemOutput != nil {
+            #if os(iOS) || (os(macOS) && swift(>=5.0))
+            if #available(macOS 14.0, *) {
+                let displayLink = CADisplayLink(target: DisplayLinkTarget({ [weak self] in
+                    self?.handleUpdate()
+                }), selector: #selector(DisplayLinkTarget.handleDisplayLinkUpdate(sender:)))
+                displayLink.preferredFramesPerSecond = self.configuration.preferredFramesPerSecond
+                displayLink.add(to: .main, forMode: .common)
+                self.displayLink = displayLink
+            } else {
+                // Fallback for macOS < 14.0 - use a timer-based approach
+                self.setupFallbackTimer()
+            }
+            #else
             let displayLink = CADisplayLink(target: DisplayLinkTarget({ [weak self] in
                 self?.handleUpdate()
             }), selector: #selector(DisplayLinkTarget.handleDisplayLinkUpdate(sender:)))
             displayLink.preferredFramesPerSecond = self.configuration.preferredFramesPerSecond
             displayLink.add(to: .main, forMode: .common)
             self.displayLink = displayLink
+            #endif
+        }
+    }
+    
+    private func setupFallbackTimer() {
+        // For macOS < 14.0, use a Timer as fallback since CADisplayLink isn't available
+        // This won't be as smooth as CADisplayLink but will work
+        DispatchQueue.main.async { [weak self] in
+            self?.handleUpdate()
         }
     }
     
@@ -186,7 +227,13 @@ public class PlayerVideoOutput: NSObject {
         }
         
         if !forced && !output.hasNewPixelBuffer(forItemTime: requestTime) {
+            #if os(iOS) || (os(macOS) && swift(>=5.0))
+            if #available(macOS 14.0, *) {
+                self.displayLink?.isPaused = true
+            }
+            #else
             self.displayLink?.isPaused = true
+            #endif
             output.requestNotificationOfMediaDataChange(withAdvanceInterval: self.advanceInterval)
             return
         }
@@ -214,6 +261,12 @@ public class PlayerVideoOutput: NSObject {
 @available(macOS, unavailable)
 extension PlayerVideoOutput: AVPlayerItemOutputPullDelegate {
     public func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
+        #if os(iOS) || (os(macOS) && swift(>=5.0))
+        if #available(macOS 14.0, *) {
+            self.displayLink?.isPaused = false
+        }
+        #else
         self.displayLink?.isPaused = false
+        #endif
     }
 }

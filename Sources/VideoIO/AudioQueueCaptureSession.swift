@@ -8,6 +8,8 @@
 import Foundation
 import AVFoundation
 
+#if !os(macOS)
+
 @available(macOS, unavailable)
 public protocol AudioQueueCaptureSessionDelegate: AnyObject {
     func audioQueueCaptureSession(_ session: AudioQueueCaptureSession, didOutputSampleBuffer sampleBuffer: CMSampleBuffer)
@@ -270,3 +272,5 @@ public class AudioQueueCaptureSession {
     }
     
 }
+
+#endif
